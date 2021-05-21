@@ -4,6 +4,12 @@ import torch.nn.functional as F
 
 import numpy as np
 
+import os
+
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+torch.cuda.set_device(0)
+
 class AdaptableNet(nn.Module):
     """
         Initializes an adaptable network.
@@ -12,24 +18,27 @@ class AdaptableNet(nn.Module):
         output_dim (int): gives the dimension of the output
         initial_size (tuple - int): Gives the initial dimension of each hidden layer. Default 1x32 hidden layer.
     """
-    def __init__(self, input_dim, output_dim, hidden_size=[32,]):
+    def __init__(self, device, input_dim, output_dim, hidden_size=[32,]):
         super(AdaptableNet, self).__init__()
         
         # Save this information for later
+        self.device = device
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.hidden_size = hidden_size
         
         # This is where we will keep all the layers of the network
-        self.layers = []
-        # Initial Layer
-        self.layers.append(nn.Linear(input_dim, hidden_size[0]))
+        self.layers = nn.ModuleList([nn.Linear(input_dim, hidden_size[0])])
+        
         # Hidden layers along with output layer
         for h in range(len(hidden_size)):
             if h == len(hidden_size) - 1:
                 self.layers.append(nn.Linear(hidden_size[h], output_dim))
             else:
                 self.layers.append(nn.Linear(hidden_size[h], hidden_size[h+1]))
+        # Send to the correct device    
+        self.layers.to(self.device)
+                
       
     """
         Passes an input through a network and returns the output
@@ -64,14 +73,22 @@ class AdaptableNet(nn.Module):
         with torch.no_grad():
             
             # Construct the new weight matrices (simply append a 0 row/column)
-            new_mat_1 = nn.Parameter(torch.vstack((w1, torch.Tensor(torch.zeros((1, w1.shape[1]))))))
-            new_mat_2 = nn.Parameter(torch.hstack((w2, torch.Tensor(torch.zeros((w2.shape[0], 1))))))
+            z1 = torch.Tensor(torch.zeros((1, w1.shape[1]))).to(self.device)
+            z2 = torch.Tensor(torch.zeros((w2.shape[0], 1))).to(self.device)
+            z3 = torch.Tensor([0]).to(self.device)
+
+            new_mat_1 = nn.Parameter(torch.vstack((w1, z1)))
+            new_mat_2 = nn.Parameter(torch.hstack((w2, z2)))
             
             # Set the appropriate weights/biases of our network
-            self.layers[h_layer].bias = nn.Parameter(torch.cat((bias, torch.Tensor([0]))))
+            
+            self.layers[h_layer].bias = nn.Parameter(torch.cat((bias, z3)))
             self.layers[h_layer].weight = new_mat_1
             self.layers[h_layer + 1].weight = new_mat_2
             self.hidden_size[h_layer] += 1
+            
+#             if next(self.parameters()).is_cuda:
+#                 self.layers[h_layer].cuda()
             
     
     """
@@ -117,3 +134,4 @@ class AdaptableNet(nn.Module):
             self.layers[h_layer].weight = new_mat_1
             self.layers[h_layer + 1].weight = new_mat_2
             self.hidden_size[h_layer] -= 1
+            
