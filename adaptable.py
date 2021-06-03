@@ -73,9 +73,9 @@ class AdaptableNet(nn.Module):
         with torch.no_grad():
             
             # Construct the new weight matrices (simply append a 0 row/column)
-            z1 = torch.Tensor(torch.zeros((1, w1.shape[1]))).to(self.device)
-            z2 = torch.Tensor(torch.zeros((w2.shape[0], 1))).to(self.device)
-            z3 = torch.Tensor([0]).to(self.device)
+            z1 = torch.Tensor(np.random.random((1, w1.shape[1]))-0.5).to(self.device)
+            z2 = torch.Tensor(np.random.random((w2.shape[0], 1))-0.5).to(self.device)
+            z3 = torch.Tensor([np.random.random() -0.5]).to(self.device)
 
             new_mat_1 = nn.Parameter(torch.vstack((w1, z1)))
             new_mat_2 = nn.Parameter(torch.hstack((w2, z2)))
